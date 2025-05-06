@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import datetime, time as datetime_time
 
 def download_contract(alice):
     """
@@ -13,20 +13,36 @@ def download_contract(alice):
     success = True
     
     try:
+        # Check if it's before 8 AM
+        current_time = datetime.now().time()
+        target_time = datetime_time(8, 0)  # 8:00 AM
+        before_8am = current_time < target_time
+        
+        if before_8am:
+            print("Note: It's before 8 AM. Previous day's contract file will be downloaded.")
+        
         # Download NFO contract master
-        nfo_response = alice.get_contract_master("NFO")
-        if nfo_response['stat'] == 'Ok' or 'contract File Downloaded' in nfo_response.get('emsg', ''):
-            print("NFO contract master downloaded successfully.")
-        else:
-            print(f"Error downloading NFO contract master: {nfo_response['emsg']}")
+        try:
+            nfo_response = alice.get_contract_master("NFO")
+            if nfo_response['stat'] == 'Ok' or 'contract File Downloaded' in nfo_response.get('emsg', ''):
+                print("NFO contract master downloaded successfully.")
+            else:
+                print(f"Error downloading NFO contract master: {nfo_response['emsg']}")
+                success = False
+        except Exception as e:
+            print(f"Error downloading NFO contract master: {str(e)}")
             success = False
             
         # Download NSE contract master
-        nse_response = alice.get_contract_master("NSE")
-        if nse_response['stat'] == 'Ok' or 'contract File Downloaded' in nse_response.get('emsg', ''):
-            print("NSE contract master downloaded successfully.")
-        else:
-            print(f"Error downloading NSE contract master: {nse_response['emsg']}")
+        try:
+            nse_response = alice.get_contract_master("NSE")
+            if nse_response['stat'] == 'Ok' or 'contract File Downloaded' in nse_response.get('emsg', ''):
+                print("NSE contract master downloaded successfully.")
+            else:
+                print(f"Error downloading NSE contract master: {nse_response['emsg']}")
+                success = False
+        except Exception as e:
+            print(f"Error downloading NSE contract master: {str(e)}")
             success = False
             
         return success
