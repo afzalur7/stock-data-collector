@@ -8,24 +8,66 @@ def fix_csv_format(exchange):
     Fix CSV file format to ensure consistency across platforms
     """
     try:
-        rows = []
-        # Read the original CSV file
+        # Read the file content
         with open(f"{exchange}.csv", 'r', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            for row in reader:
-                # Clean each field in the row
-                cleaned_row = [field.strip().strip('"') for field in row]
-                rows.append(cleaned_row)
-        
-        if not rows:
+            content = f.read()
+            
+        # Split into lines and clean up
+        lines = content.splitlines()
+        if not lines:
             print(f"Warning: {exchange}.csv is empty")
             return False
             
-        # Write back with consistent format
-        with open(f"{exchange}.csv", 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
-            for row in rows:
-                writer.writerow(row)
+        # Process header
+        header = lines[0].strip()
+        if not header:
+            print(f"Warning: {exchange}.csv has no header")
+            return False
+            
+        # Expected columns
+        expected_columns = ['token', 'symbol', 'name', 'expiry', 'strike', 'lotsize', 'instrumenttype', 'exch_seg', 'tick_size']
+        
+        # Write back with proper format
+        with open(f"{exchange}.csv", 'w', newline='\n', encoding='utf-8') as f:
+            # Write header
+            f.write(','.join(expected_columns) + '\n')
+            
+            # Process and write data rows
+            for line in lines[1:]:
+                # Skip empty lines
+                if not line.strip():
+                    continue
+                    
+                # Split the line and clean fields
+                fields = line.split(',')
+                cleaned_fields = []
+                
+                # Process each field
+                for i, field in enumerate(fields):
+                    field = field.strip().strip('"')
+                    # Handle numeric fields
+                    if i == 0:  # token
+                        field = field if field.isdigit() else '0'
+                    elif i == 4:  # strike
+                        try:
+                            float(field)
+                        except:
+                            field = '0.0'
+                    elif i == 5:  # lotsize
+                        field = field if field.isdigit() else '0'
+                    elif i == 8:  # tick_size
+                        try:
+                            float(field)
+                        except:
+                            field = '0.0'
+                    cleaned_fields.append(field)
+                
+                # Ensure we have all columns
+                while len(cleaned_fields) < len(expected_columns):
+                    cleaned_fields.append('')
+                
+                # Write the line
+                f.write(','.join(cleaned_fields[:len(expected_columns)]) + '\n')
         
         return True
     except Exception as e:
