@@ -13,6 +13,7 @@ import time
 from datetime import datetime
 import csv
 import os
+from contract_downloader import download_contract
 
 # Authentication
 def authenticate():
@@ -39,15 +40,9 @@ def check_connectivity():
 
 check_connectivity()
 
-# # ##This line of code is to download the contract master
-# response = alice.get_contract_master("NFO") 
+# Download contract master
+download_contract(alice)
 
-# # Check if the contract master was downloaded successfully
-# if response['stat'] == 'Ok':
-#     print("Previous day's master contract downloaded successfully.")
-# else:
-#     print(f"Error: {response['emsg']}")
-# ### Contract master code ends here
 
 # Load conditions from Excel
 def load_conditions_from_excel(file_path):
