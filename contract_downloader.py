@@ -1,3 +1,5 @@
+import os
+import requests
 from datetime import datetime, time as datetime_time
 
 def download_contract(alice):
@@ -21,13 +23,28 @@ def download_contract(alice):
         if before_8am:
             print("Note: It's before 8 AM. Previous day's contract file will be downloaded.")
         
+        # Get session ID from alice object
+        session_id = alice.get_session_id()
+        if session_id.get('stat') != 'Ok':
+            print(f"Error getting session ID: {session_id.get('emsg')}")
+            return False
+            
+        headers = {
+            'Authorization': f"Bearer {session_id.get('sessionID')}",
+            'User-Agent': 'pya3'
+        }
+        
         # Download NFO contract master
         try:
-            nfo_response = alice.get_contract_master("NFO")
-            if nfo_response['stat'] == 'Ok' or 'contract File Downloaded' in nfo_response.get('emsg', ''):
+            nfo_url = 'https://ant.aliceblueonline.com/api/v2/contracts.json?exch=NFO'
+            nfo_response = requests.get(nfo_url, headers=headers)
+            
+            if nfo_response.status_code == 200:
+                with open('NFO.csv', 'wb') as f:
+                    f.write(nfo_response.content)
                 print("NFO contract master downloaded successfully.")
             else:
-                print(f"Error downloading NFO contract master: {nfo_response['emsg']}")
+                print(f"Error downloading NFO contract master: {nfo_response.text}")
                 success = False
         except Exception as e:
             print(f"Error downloading NFO contract master: {str(e)}")
@@ -35,11 +52,15 @@ def download_contract(alice):
             
         # Download NSE contract master
         try:
-            nse_response = alice.get_contract_master("NSE")
-            if nse_response['stat'] == 'Ok' or 'contract File Downloaded' in nse_response.get('emsg', ''):
+            nse_url = 'https://ant.aliceblueonline.com/api/v2/contracts.json?exch=NSE'
+            nse_response = requests.get(nse_url, headers=headers)
+            
+            if nse_response.status_code == 200:
+                with open('NSE.csv', 'wb') as f:
+                    f.write(nse_response.content)
                 print("NSE contract master downloaded successfully.")
             else:
-                print(f"Error downloading NSE contract master: {nse_response['emsg']}")
+                print(f"Error downloading NSE contract master: {nse_response.text}")
                 success = False
         except Exception as e:
             print(f"Error downloading NSE contract master: {str(e)}")
