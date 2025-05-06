@@ -8,41 +8,34 @@ def fix_csv_format(exchange):
     Fix CSV file format to ensure consistency across platforms
     """
     try:
-        # First read the raw file to understand its structure
+        rows = []
+        # Read the original CSV file
         with open(f"{exchange}.csv", 'r', encoding='utf-8') as f:
-            header = f.readline().strip()
-            columns = header.split(',')
+            reader = csv.reader(f)
+            for row in reader:
+                # Clean each field in the row
+                cleaned_row = [field.strip().strip('"') for field in row]
+                rows.append(cleaned_row)
         
-        # Read CSV with detected columns
-        df = pd.read_csv(
-            f"{exchange}.csv",
-            names=columns,
-            skiprows=1,
-            dtype=str,
-            encoding='utf-8'
-        )
-        
-        # Clean up the data
-        df = df.replace({'"': '', '\n': '', '\r': ''}, regex=True)
-        df = df.fillna('')
-        
-        # Convert numeric columns
-        numeric_cols = ['token', 'strike', 'lotsize', 'tick_size']
-        for col in numeric_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-                df[col] = df[col].fillna(0)  # Replace NaN with 0 for numeric columns
-        
+        if not rows:
+            print(f"Warning: {exchange}.csv is empty")
+            return False
+            
         # Write back with consistent format
-        with open(f"{exchange}.csv", 'w', newline='\n', encoding='utf-8') as f:
+        with open(f"{exchange}.csv", 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
-            writer.writerow(columns)  # Write header
-            for _, row in df.iterrows():
+            for row in rows:
                 writer.writerow(row)
         
         return True
     except Exception as e:
         print(f"Error fixing {exchange}.csv format: {str(e)}")
+        print(f"Attempting to read file content directly:")
+        try:
+            with open(f"{exchange}.csv", 'r', encoding='utf-8') as f:
+                print(f.read()[:200])  # Print first 200 chars for debugging
+        except Exception as read_error:
+            print(f"Error reading file: {read_error}")
         return False
 
 def download_contract(alice):
