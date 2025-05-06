@@ -40,13 +40,13 @@ def check_connectivity():
 check_connectivity()
 
 # # ##This line of code is to download the contract master
-response = alice.get_contract_master("NFO") 
+# response = alice.get_contract_master("NFO") 
 
-# Check if the contract master was downloaded successfully
-if response['stat'] == 'Ok':
-    print("Previous day's master contract downloaded successfully.")
-else:
-    print(f"Error: {response['emsg']}")
+# # Check if the contract master was downloaded successfully
+# if response['stat'] == 'Ok':
+#     print("Previous day's master contract downloaded successfully.")
+# else:
+#     print(f"Error: {response['emsg']}")
 # ### Contract master code ends here
 
 # Load conditions from Excel
