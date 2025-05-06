@@ -15,6 +15,43 @@ import csv
 import os
 from contract_downloader import download_contract
 
+# Patch get_instrument_by_symbol to handle CSV reading more robustly
+def patched_get_instrument_by_symbol(self, exchange, symbol):
+    try:
+        # Read CSV with more robust error handling
+        contract = pd.read_csv(
+            f"{exchange}.csv",
+            encoding='utf-8',
+            on_bad_lines='skip',
+            dtype=str
+        )
+        
+        # Find the instrument
+        instrument = contract[contract['symbol'] == symbol]
+        
+        if len(instrument) == 0:
+            return None
+            
+        # Create Instrument object
+        row = instrument.iloc[0]
+        return Instrument(
+            token=int(row['token']) if pd.notna(row['token']) else 0,
+            symbol=row['symbol'],
+            name=row['name'] if 'name' in row else '',
+            expiry=row['expiry'] if 'expiry' in row else '',
+            strike=float(row['strike']) if 'strike' in row and pd.notna(row['strike']) else 0.0,
+            tick_size=float(row['tick_size']) if 'tick_size' in row and pd.notna(row['tick_size']) else 0.0,
+            lot_size=int(row['lotsize']) if 'lotsize' in row and pd.notna(row['lotsize']) else 0,
+            instrument_type=row['instrumenttype'] if 'instrumenttype' in row else '',
+            exchange=exchange
+        )
+    except Exception as e:
+        print(f"Error reading {exchange}.csv: {str(e)}")
+        return None
+
+# Apply the patch
+Aliceblue.get_instrument_by_symbol = patched_get_instrument_by_symbol
+
 # Authentication
 def authenticate():
     try:
