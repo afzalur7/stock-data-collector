@@ -11,6 +11,8 @@ import json
 import threading
 import time
 from datetime import datetime
+import csv
+import os
 
 # Authentication
 def authenticate():
@@ -36,17 +38,8 @@ def check_connectivity():
         exit(1)
 
 check_connectivity()
-# # ##This line of code is to download the contract master
-# response = alice.get_contract_master("NFO") 
 
-# # Check if the contract master was downloaded successfully
-# if response['stat'] == 'Ok':
-#     print("Previous day's master contract downloaded successfully.")
-# else:
-#     print(f"Error: {response['emsg']}")
-# ### Contract master code ends here
-
-# # Load conditions from Excel
+# Load conditions from Excel
 def load_conditions_from_excel(file_path):
     df = pd.read_excel(file_path)
     conditions = {}
@@ -67,10 +60,150 @@ def load_conditions_from_excel(file_path):
         }
     return conditions
 
+# Get file paths with date
+def get_data_file_paths():
+    # Create data directory if it doesn't exist
+    data_dir = 'market_data'
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+    
+    # Get current date for file names
+    current_date = datetime.now().strftime('%Y%m%d')
+    
+    # Define file paths
+    trading_data_file = os.path.join(data_dir, f'trading_data_{current_date}.csv')
+    depth_data_file = os.path.join(data_dir, f'market_depth_{current_date}.csv')
+    
+    return trading_data_file, depth_data_file
+
+# Initialize CSV files with headers if they don't exist
+def initialize_csv():
+    trading_data_file, depth_data_file = get_data_file_paths()
+    
+    # Main trading data CSV
+    if not os.path.exists(trading_data_file):
+        headers = [
+            'timestamp', 'symbol', 'open', 'high', 'low', 'close', 'ltp',
+            'volume', 'bid_qty', 'offer_qty', 'expiry',
+            'lower_circuit', 'upper_circuit', 'oi', 'ltt', 'avg_price',
+            'buy_state', 'sell_state', 'sl_state'
+        ]
+        with open(trading_data_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+        print(f"Created new trading data file: {trading_data_file}")
+    
+    # Market depth CSV
+    if not os.path.exists(depth_data_file):
+        depth_headers = [
+            'timestamp', 'symbol', 'type',  # type will be 'bid' or 'offer'
+            'price', 'orders', 'quantity'
+        ]
+        with open(depth_data_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(depth_headers)
+        print(f"Created new market depth file: {depth_data_file}")
+
+# Dictionary to store market data
+market_data = {}
+depth_data = {}  # To store market depth information
+
+# Record market depth to CSV
+def record_depth_data():
+    while True:
+        try:
+            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            data_rows = []
+            
+            with market_data_lock:
+                for symbol in depth_data:
+                    data = depth_data[symbol]
+                    
+                    # Record bid depth
+                    if 'bid' in data:
+                        for level in data['bid']:
+                            data_rows.append([
+                                current_time,
+                                symbol,
+                                'bid',
+                                level.get('price', 0),
+                                level.get('orders', 0),
+                                level.get('quantity', 0)
+                            ])
+                    
+                    # Record offer depth
+                    if 'offer' in data:
+                        for level in data['offer']:
+                            data_rows.append([
+                                current_time,
+                                symbol,
+                                'offer',
+                                level.get('price', 0),
+                                level.get('orders', 0),
+                                level.get('quantity', 0)
+                            ])
+            
+            if data_rows:
+                _, depth_data_file = get_data_file_paths()
+                with open(depth_data_file, 'a', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerows(data_rows)
+                
+                print(f"Depth data recorded at {current_time}")
+            
+        except Exception as e:
+            print(f"Error recording depth data: {e}")
+            
+        time.sleep(10)  # Record every 10 seconds
+
+# Record data to CSV
+def record_data():
+    while True:
+        try:
+            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            data_rows = []
+            
+            for symbol in market_data:
+                if symbol in conditions:
+                    data = market_data[symbol]
+                    data_rows.append([
+                        current_time,
+                        symbol,
+                        data.get('open', 0),
+                        data.get('high', 0),
+                        data.get('low', 0),
+                        data.get('close', 0),
+                        data.get('ltp', 0),
+                        data.get('volume', 0),
+                        data.get('bid_qty', 0),
+                        data.get('offer_qty', 0),
+                        data.get('expiry', ''),
+                        data.get('lower_circuit', 0),
+                        data.get('upper_circuit', 0),
+                        data.get('oi', 0),
+                        data.get('ltt', ''),
+                        data.get('avg_price', 0),
+                        conditions[symbol]['buy_state'],
+                        conditions[symbol]['sell_state'],
+                        conditions[symbol]['sl_state']
+                    ])
+            
+            trading_data_file, _ = get_data_file_paths()
+            with open(trading_data_file, 'a', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerows(data_rows)
+                
+            print(f"Data recorded at {current_time}")
+            
+        except Exception as e:
+            print(f"Error recording data: {e}")
+            
+        time.sleep(10)  # Record every 10 seconds
+
 # Specify the correct file path
 file_path = 'instruments.xlsx'
 conditions = load_conditions_from_excel(file_path)
-# print(f"this is conditions:{conditions}") #Debug code to check the condition generated properly
+print(f"this is conditions:{conditions}") #Debug code to check the condition generated properly
 
 LTP = {}
 socket_opened = False
@@ -78,6 +211,7 @@ subscribe_list = []
 
 # Lock for thread safety
 state_lock = threading.Lock()
+market_data_lock = threading.Lock()
 
 # Define WebSocket callbacks
 def socket_open():
@@ -94,13 +228,100 @@ def socket_error(message):
     print("Error:", message)
 
 def feed_data(message):
-    global LTP
+    global LTP, market_data, depth_data
     feed_message = json.loads(message)
 
-    if 'lp' in feed_message and 'ts' in feed_message:
+    if 'ts' in feed_message:
         symbol = feed_message['ts']
-        LTP[symbol] = float(feed_message['lp'])
-        print(symbol, ': ', LTP[symbol])  # Debugging statement to print LTP
+        
+        with market_data_lock:
+            # Initialize market data for the symbol if not exists
+            if symbol not in market_data:
+                market_data[symbol] = {}
+            if symbol not in depth_data:
+                depth_data[symbol] = {'bid': [], 'offer': []}
+            
+            # Update market data with available fields
+            if 'lp' in feed_message:  # Last Price
+                LTP[symbol] = float(feed_message['lp'])
+                market_data[symbol]['ltp'] = float(feed_message['lp'])
+            
+            if 'o' in feed_message:  # Open
+                market_data[symbol]['open'] = float(feed_message['o'])
+            
+            if 'h' in feed_message:  # High
+                market_data[symbol]['high'] = float(feed_message['h'])
+            
+            if 'l' in feed_message:  # Low
+                market_data[symbol]['low'] = float(feed_message['l'])
+            
+            if 'c' in feed_message:  # Close
+                market_data[symbol]['close'] = float(feed_message['c'])
+            
+            if 'v' in feed_message:  # Volume
+                market_data[symbol]['volume'] = int(feed_message['v'])
+            
+            if 'bq' in feed_message:  # Bid Quantity
+                market_data[symbol]['bid_qty'] = int(feed_message['bq'])
+            
+            if 'sq' in feed_message:  # Offer Quantity
+                market_data[symbol]['offer_qty'] = int(feed_message['sq'])
+            
+            if 'oi' in feed_message:  # Open Interest
+                market_data[symbol]['oi'] = int(feed_message['oi'])
+            
+            if 'ltt' in feed_message:  # Last Trade Time
+                market_data[symbol]['ltt'] = feed_message['ltt']
+            
+            if 'ap' in feed_message:  # Average Price
+                market_data[symbol]['avg_price'] = float(feed_message['ap'])
+            
+            # Update market depth data
+            if 'dp' in feed_message:  # Depth
+                depth = feed_message['dp']
+                
+                # Process bid depth
+                if 'bid' in depth:
+                    depth_data[symbol]['bid'] = []
+                    for bid in depth['bid']:
+                        depth_data[symbol]['bid'].append({
+                            'price': float(bid.get('p', 0)),
+                            'orders': int(bid.get('no', 0)),
+                            'quantity': int(bid.get('q', 0))
+                        })
+                
+                # Process offer depth
+                if 'ask' in depth:
+                    depth_data[symbol]['offer'] = []
+                    for offer in depth['ask']:
+                        depth_data[symbol]['offer'].append({
+                            'price': float(offer.get('p', 0)),
+                            'orders': int(offer.get('no', 0)),
+                            'quantity': int(offer.get('q', 0))
+                        })
+            
+            # Get additional instrument details
+            try:
+                if 'NIFTY' in symbol:
+                    instrument = alice.get_instrument_for_fno(
+                        exch='NFO',
+                        symbol='NIFTY',
+                        expiry_date=conditions[symbol]['expiry_date'],
+                        is_fut=False,
+                        strike=conditions[symbol]['strike'],
+                        is_CE='C' in symbol
+                    )
+                else:
+                    instrument = alice.get_instrument_by_symbol('NSE', symbol)
+                
+                if instrument:
+                    market_data[symbol]['expiry'] = getattr(instrument, 'expiry', '')
+                    market_data[symbol]['lower_circuit'] = getattr(instrument, 'lower_circuit', 0)
+                    market_data[symbol]['upper_circuit'] = getattr(instrument, 'upper_circuit', 0)
+            except Exception as e:
+                print(f"Error getting instrument details for {symbol}: {e}")
+
+        print(f"{symbol}: {market_data[symbol]}")  # Debug print
         check_conditions(symbol)
 
 def check_conditions(symbol):
@@ -223,6 +444,18 @@ for symbol, cond in conditions.items():
 subscribe_list = [instr for instr in subscribe_list if isinstance(instr, Instrument)]
 
 print(f"Subscribe List: {subscribe_list}")  # Debugging statement to print the subscribe list
+
+# Initialize CSV files
+initialize_csv()
+
+# Start data recording threads
+data_recording_thread = threading.Thread(target=record_data)
+data_recording_thread.daemon = True
+data_recording_thread.start()
+
+depth_recording_thread = threading.Thread(target=record_depth_data)
+depth_recording_thread.daemon = True
+depth_recording_thread.start()
 
 # Start WebSocket in a separate thread
 def start_websocket():
