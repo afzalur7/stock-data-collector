@@ -8,33 +8,38 @@ def fix_csv_format(exchange):
     Fix CSV file format to ensure consistency across platforms
     """
     try:
-        # Read the CSV file with robust error handling
+        # First read the raw file to understand its structure
+        with open(f"{exchange}.csv", 'r', encoding='utf-8') as f:
+            header = f.readline().strip()
+            columns = header.split(',')
+        
+        # Read CSV with detected columns
         df = pd.read_csv(
             f"{exchange}.csv",
-            on_bad_lines='skip',  # Updated from error_bad_lines
-            dtype=str,  # Read all columns as strings initially
+            names=columns,
+            skiprows=1,
+            dtype=str,
             encoding='utf-8'
         )
         
-        # Define expected numeric columns
-        numeric_cols = ['token', 'strike', 'lotsize', 'tick_size']
+        # Clean up the data
+        df = df.replace({'"': '', '\n': '', '\r': ''}, regex=True)
+        df = df.fillna('')
         
-        # Convert numeric columns properly
+        # Convert numeric columns
+        numeric_cols = ['token', 'strike', 'lotsize', 'tick_size']
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
+                df[col] = df[col].fillna(0)  # Replace NaN with 0 for numeric columns
         
-        # Clean up other columns
-        df = df.fillna('')  # Replace NaN with empty string
+        # Write back with consistent format
+        with open(f"{exchange}.csv", 'w', newline='\n', encoding='utf-8') as f:
+            writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+            writer.writerow(columns)  # Write header
+            for _, row in df.iterrows():
+                writer.writerow(row)
         
-        # Save with consistent formatting
-        df.to_csv(
-            f"{exchange}.csv",
-            index=False,
-            quoting=csv.QUOTE_NONNUMERIC,
-            encoding='utf-8',
-            line_terminator='\n'  # Ensure consistent line endings
-        )
         return True
     except Exception as e:
         print(f"Error fixing {exchange}.csv format: {str(e)}")
