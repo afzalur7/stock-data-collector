@@ -41,7 +41,9 @@ def check_connectivity():
 check_connectivity()
 
 # Download contract master
-download_contract(alice)
+if not download_contract(alice):
+    print("Failed to download contract master. Exiting...")
+    exit(1)
 
 
 # Load conditions from Excel
