@@ -1,6 +1,25 @@
 import os
+import csv
 import pandas as pd
 from datetime import datetime, time as datetime_time
+
+def fix_csv_format(exchange):
+    """
+    Fix CSV file format to ensure consistency across platforms
+    """
+    try:
+        # Read the CSV file
+        df = pd.read_csv(f"{exchange}.csv", error_bad_lines=False)
+        
+        # Ensure all columns are properly formatted
+        df = df.fillna('')  # Replace NaN with empty string
+        
+        # Save with consistent formatting
+        df.to_csv(f"{exchange}.csv", index=False, quoting=csv.QUOTE_NONNUMERIC)
+        return True
+    except Exception as e:
+        print(f"Error fixing {exchange}.csv format: {str(e)}")
+        return False
 
 def download_contract(alice):
     """
@@ -29,7 +48,12 @@ def download_contract(alice):
             nfo_response = alice.get_contract_master("NFO")
             
             if nfo_response['stat'] == 'Ok' or 'contract File Downloaded' in nfo_response.get('emsg', ''):
-                print("NFO contract master downloaded successfully.")
+                # Fix CSV format after successful download
+                if fix_csv_format("NFO"):
+                    print("NFO contract master downloaded and formatted successfully.")
+                else:
+                    print("Error fixing NFO contract master format.")
+                    success = False
             else:
                 print(f"Error downloading NFO contract master: {nfo_response.get('emsg', '')}")
                 success = False
@@ -43,7 +67,12 @@ def download_contract(alice):
             nse_response = alice.get_contract_master("NSE")
             
             if nse_response['stat'] == 'Ok' or 'contract File Downloaded' in nse_response.get('emsg', ''):
-                print("NSE contract master downloaded successfully.")
+                # Fix CSV format after successful download
+                if fix_csv_format("NSE"):
+                    print("NSE contract master downloaded and formatted successfully.")
+                else:
+                    print("Error fixing NSE contract master format.")
+                    success = False
             else:
                 print(f"Error downloading NSE contract master: {nse_response.get('emsg', '')}")
                 success = False
